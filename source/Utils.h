@@ -172,5 +172,32 @@ namespace dae
 #endif
 		}
 #pragma warning(pop)
+
+		static bool TriangleHit(const Vector2& v0, const Vector2& v1, const Vector2& v2, const Vector2& pixel)
+		{
+			Vector2 pointToSide{ pixel - v0 };
+			const Vector2 a = v1 - v0;
+			if (Vector2::Cross(a, pointToSide) < 0) return false; // Point is not in triangle
+			//pointToSide = pixel - v0;
+			const Vector2 b = v2 - v0;
+			if (Vector2::Cross(b, pointToSide) > 0) return false; // Point is not in triangle
+			pointToSide = pixel - v1;
+			const Vector2 c = v2 - v1;
+			if (Vector2::Cross(c, pointToSide) < 0) return false; // Point is not in triangle
+
+			return true;
+		}
+
+		static bool TriangleHit(const Vector3& v0, const Vector3& v1, const Vector3& v2, const Vector2& pixel)
+		{
+			return TriangleHit(Vector2(v0.x, v0.y), Vector2(v1.x, v1.y), Vector2(v2.x, v2.y), pixel);
+		}
+
+		static bool TriangleHit(const Vertex& v0, const Vertex& v1, const Vertex& v2, const Vector2& pixel)
+		{
+			return TriangleHit(v0.position, v1.position, v2.position, pixel);	
+		}
+		
+		
 	}
 }
