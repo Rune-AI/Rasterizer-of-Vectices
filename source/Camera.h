@@ -33,6 +33,10 @@ namespace dae
 		Matrix invViewMatrix{};
 		Matrix viewMatrix{};
 
+        const float movementSpeed{ 7.0f };
+        const float rotationSpeed{ 40.0f };
+        const float keyboardRotationSpeed{ 80.0f };
+		
 		bool updateONB{ true };
 
 		void Initialize(float _fovAngle = 90.f, Vector3 _origin = {0.f,0.f,0.f})
@@ -92,10 +96,6 @@ namespace dae
 
 		void InputLogic(Timer* pTimer)
 		{
-            const float movementSpeed{ 7.0f };
-            const float rotationSpeed{ 20.0f };
-            const float keyboardRotationSpeed{ 80.0f };
-			
             const float deltaTime = pTimer->GetElapsed();
 
             //Keyboard Input
@@ -174,10 +174,6 @@ namespace dae
                 totalYaw += yaw;
                 updateONB = true;
             }
-
-            const Matrix finalRotation = Matrix::CreateRotationX(totalPitch * TO_RADIANS) * Matrix::CreateRotationY(totalYaw * TO_RADIANS);
-            forward = finalRotation.TransformVector(Vector3::UnitZ);
-            forward.Normalize();
 		}
 	};
 }
