@@ -295,7 +295,7 @@ void Renderer::Render_W1_Part4()
 
 void Renderer::Render_W1_Part5()
 {
-	SDL_FillRect(m_pBackBuffer, NULL, 0);
+	SDL_FillRect(m_pBackBuffer, NULL, 0x111111);
 	std::fill_n(m_pDepthBufferPixels, m_Width * m_Height, FLT_MAX);
 
 	const std::vector<Vertex> vertices_world
@@ -318,7 +318,7 @@ void Renderer::Render_W1_Part5()
 		const Vertex vertex1{ verteces_view[i * 3 + 1] };
 		const Vertex vertex2{ verteces_view[i * 3 + 2] };
 
-		Vector2 bbTopLeft{};
+		/*Vector2 bbTopLeft{};
 		bbTopLeft.x = std::min(vertex0.position.x, std::min(vertex1.position.x, vertex2.position.x));
 		bbTopLeft.y = std::max(vertex0.position.y, std::max(vertex1.position.y, vertex2.position.y));
 
@@ -330,8 +330,26 @@ void Renderer::Render_W1_Part5()
 		{
 			for (int32_t py{}; py < m_Height; ++py)
 			{
-				if (!(px > bbTopLeft.x && px < bbBottomRight.x && py > bbBottomRight.y && py < bbTopLeft.y)) continue;
+				if (!(px > bbTopLeft.x && px < bbBottomRight.x && py > bbBottomRight.y && py < bbTopLeft.y)) continue;*/
 
+		uint32_t bbMaxx{}, bbMaxy{};
+		bbMaxx = static_cast<uint32_t>(std::max(vertex0.position.x, std::max(vertex1.position.x, vertex2.position.x)));
+		bbMaxy = static_cast<uint32_t>(std::max(vertex0.position.y, std::max(vertex1.position.y, vertex2.position.y)));
+
+		uint32_t bbMinx{}, bbMiny{};
+		bbMinx = static_cast<uint32_t>(std::min(vertex0.position.x, std::min(vertex1.position.x, vertex2.position.x)));
+		bbMiny = static_cast<uint32_t>(std::min(vertex0.position.y, std::min(vertex1.position.y, vertex2.position.y)));
+
+		bbMaxx = Clamp(bbMaxx, 0, m_Width);
+		bbMaxy = Clamp(bbMaxy, 0, m_Height);
+
+		bbMinx = Clamp(bbMinx, 0, m_Width);
+		bbMiny = Clamp(bbMiny, 0, m_Height);
+
+		for (uint32_t px{ bbMinx }; px < bbMaxx; ++px)
+		{
+			for (uint32_t py{ bbMiny }; py < bbMaxy; ++py)
+			{
 				Vector2 p{ static_cast<float>(px), static_cast<float>(py) };
 
 				//Does pixel and triangle overlap?
