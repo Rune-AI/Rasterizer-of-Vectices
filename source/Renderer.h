@@ -39,6 +39,10 @@ namespace dae
 		void Render_W1_Part4(); //Depth Buffer
 		void Render_W1_Part5(); //BoundingBox Optimization
 
+		void Render_W2_Part1(); //TriangleList
+		void Render_W2_Part2(); //TriangleStrip
+		void Render_W2_Part3(); //Texture, Bounding box fix, Improved depth buffer
+
 	private:
 		SDL_Window* m_pWindow{};
 
@@ -53,7 +57,11 @@ namespace dae
 		int m_Width{};
 		int m_Height{};
 
+		Texture* m_pTexture{};
+
 		//Function that transforms the vertices from the mesh from World space to Screen space
 		void VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const; //W1 Version
+		void VertexTransformationFunction(const std::vector<Mesh>& mesh_in, std::vector<Mesh>& mesh_out) const; //W2 Version
+
 	};
 }

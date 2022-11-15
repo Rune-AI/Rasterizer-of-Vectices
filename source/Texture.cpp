@@ -24,15 +24,20 @@ namespace dae
 		//TODO
 		//Load SDL_Surface using IMG_LOAD
 		//Create & Return a new Texture Object (using SDL_Surface)
-
-		return nullptr;
+		return new Texture{ IMG_Load(path.c_str()) };
 	}
 
 	ColorRGB Texture::Sample(const Vector2& uv) const
 	{
 		//TODO
 		//Sample the correct texel for the given uv
-
-		return {};
+		
+		Uint32 u = uv.x * m_pSurface->w;
+		Uint32 v = uv.y * m_pSurface->h;
+		
+		Uint8 r, g, b;
+		SDL_GetRGB(m_pSurfacePixels[Uint32(u * m_pSurface->h + v)], m_pSurface->format, &r, &g, &b);
+		ColorRGB color{ r, g, b };
+		return  color / 255.0f;
 	}
 }
