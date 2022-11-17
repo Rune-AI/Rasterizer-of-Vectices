@@ -799,7 +799,7 @@ void Renderer::Render_W2_Part3()
 							//finalColor = vertex0.color * w0 + vertex1.color * w1 + vertex2.color * w2;
 							//Vector2 uv{ vertex0.uv * w0 + vertex1.uv * w1 + vertex2.uv * w2 };
 							Vector2 uv = (vertex0.uv / vertex0.position.z * w0 + vertex1.uv / vertex1.position.z * w1 + vertex2.uv / vertex2.position.z * w2) * currentDepth;
-							uv = Vector2{ uv.y, uv.x }; // I am not sure why it's turned otherwise
+							uv = Vector2{ Clamp(uv.y, 0.f, 1.f), Clamp(uv.x, 0.f, 1.f) }; // I am not sure why it's turned otherwise
 							finalColor = m_pTexture->Sample(uv);
 							
 
