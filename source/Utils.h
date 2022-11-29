@@ -4,7 +4,7 @@
 #include "Math.h"
 #include "DataTypes.h"
 
-#define DISABLE_OBJ
+//#define DISABLE_OBJ
 
 namespace dae
 {
@@ -16,8 +16,7 @@ namespace dae
 		static bool ParseOBJ(const std::string& filename, std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, bool flipAxisAndWinding = true)
 		{
 #ifdef DISABLE_OBJ
-
-			//TODO: Enable the code below after uncommenting all the vertex attributes of DataTypes::Vertex
+			
 			// >> Comment/Remove '#define DISABLE_OBJ'
 			assert(false && "OBJ PARSER not enabled! Check the comments in Utils::ParseOBJ");
 
@@ -193,11 +192,24 @@ namespace dae
 			return TriangleHit(Vector2(v0.x, v0.y), Vector2(v1.x, v1.y), Vector2(v2.x, v2.y), pixel);
 		}
 
+		static bool TriangleHit(const Vector4& v0, const Vector4& v1, const Vector4& v2, const Vector2& pixel)
+		{
+			return TriangleHit(Vector2(v0.x, v0.y), Vector2(v1.x, v1.y), Vector2(v2.x, v2.y), pixel);
+		}
+
 		static bool TriangleHit(const Vertex& v0, const Vertex& v1, const Vertex& v2, const Vector2& pixel)
 		{
 			return TriangleHit(v0.position, v1.position, v2.position, pixel);	
 		}
-		
-		
+
+		static bool TriangleHit(const Vertex_Out& v0, const Vertex_Out& v1, const Vertex_Out& v2, const Vector2& pixel)
+		{
+			return TriangleHit(v0.position, v1.position, v2.position, pixel);
+		}
+
+		static float Remap(float value, float min, float max)
+		{
+			return (value - min) / (max - min);
+		}
 	}
 }

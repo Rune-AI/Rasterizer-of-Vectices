@@ -26,9 +26,42 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	std::fill_n(m_pDepthBufferPixels, m_Width * m_Height, FLT_MAX);
 
 	//Initialize Camera
-	m_Camera.Initialize(60.f, { .0f, .0f, -10.f });
+	m_Camera.Initialize(60.f, { .0f, .0f, -10.f }, m_Width / static_cast<float>(m_Height));
 
-	m_pTexture = Texture::LoadFromFile("Resources/uv_grid_2.png");
+	//m_pTexture = Texture::LoadFromFile("Resources/uv_grid_2.png");
+	m_pTexture = Texture::LoadFromFile("Resources/tuktuk.png");
+	
+	
+	
+	m_Meshes = {
+		Mesh
+		{
+			/*{
+				Vertex{{-3, 3, -2}, {1, 0, 0}, {0, 0}},
+				Vertex{{0, 3, -2}, {1, 0, 0}, {.5f, 0}},
+				Vertex{{3, 3, -2}, {1, 0, 0}, {1, 0}},
+				Vertex{{-3, 0, -2}, {0, 1, 0}, {0, .5f}},
+				Vertex{{0, 0, -2}, {0, 1, 0}, {.5f, .5f}},
+				Vertex{{3, 0, -2}, {0, 1, 0}, {1, .5f}},
+				Vertex{{-3, -3, -2}, {0, 0, 1}, {0, 1}},
+				Vertex{{0, -3, -2}, {0, 0, 1}, {.5f, 1}},
+				Vertex{{3, -3, -2}, {0, 0, 1}, {1, 1}}
+			},
+			{
+				3,0,4,1,5,2,
+				2,6,
+				6,3,7,4,8,5
+			},
+			PrimitiveTopology::TriangleStrip*/
+		}
+	};
+	
+	if (!Utils::ParseOBJ("Resources/tuktuk.obj", m_Meshes[0].vertices, m_Meshes[0].indices))
+	{
+		// Failed texture load;
+	}
+	m_Meshes[0].primitiveTopology = PrimitiveTopology::TriangleList;
+	m_Meshes[0].worldMatrix = Matrix::CreateTranslation(Vector3{0, -5, 20});
 }
 
 Renderer::~Renderer()
@@ -40,6 +73,15 @@ Renderer::~Renderer()
 void Renderer::Update(Timer* pTimer)
 {
 	m_Camera.Update(pTimer);
+	if (m_RotateMeshes)
+	{
+		for (Mesh& mesh : m_Meshes)
+		{
+			mesh.worldMatrix = Matrix::CreateRotationY(pTimer->GetElapsed() * 1.f) * mesh.worldMatrix;
+		}
+	}
+
+	InputLogic(pTimer);
 }
 
 void Renderer::Render()
@@ -57,7 +99,9 @@ void Renderer::Render()
 
 	//Render_W2_Part1(); //TriangleList
 	//Render_W2_Part2(); //TriangleStrip
-	Render_W2_Part3(); //Texture, Bounding box fix, Improved depth buffer
+	//Render_W2_Part3(); //Texture, Bounding box fix, Improved depth buffer
+	
+	Render_W3_Part1(); //TUKTUK
 
 	//@END
 	//Update SDL Surface
@@ -123,8 +167,36 @@ void Renderer::VertexTransformationFunction(const std::vector<Mesh>& mesh_in, st
 			mesh_out[meshIndex].vertices[i].position.y = (1 - mesh_out[meshIndex].vertices[i].position.y) / 2.f * m_Height;
 		}
 	}
+}
 
-	
+void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes) const
+{	
+	for (Mesh& mesh : meshes)
+	{
+		mesh.vertices_out.clear();
+
+		// We combine world and view matrix and projection into a single worldViewProjectionMatrix
+		Matrix worldViewProjectionMatrix{ mesh.worldMatrix * m_Camera.viewMatrix * m_Camera.projectionMatrix };
+
+		for (const Vertex& vertex : mesh.vertices)
+		{
+			Vector4 position{ worldViewProjectionMatrix.TransformPoint({ vertex.position, 1 }) };
+
+			// Prespective Divide
+			position.x /= position.w;
+			position.y /= position.w;
+			position.z /= position.w;
+
+			Vertex_Out v_out{};
+			v_out.position = position;
+			v_out.color = vertex.color;
+			v_out.normal = vertex.normal;
+			v_out.tangent = vertex.tangent;
+			v_out.uv = vertex.uv;
+
+			mesh.vertices_out.emplace_back(v_out);
+		}
+	}
 }
 
 bool Renderer::SaveBufferToImage() const
@@ -799,7 +871,6 @@ void Renderer::Render_W2_Part3()
 							//finalColor = vertex0.color * w0 + vertex1.color * w1 + vertex2.color * w2;
 							//Vector2 uv{ vertex0.uv * w0 + vertex1.uv * w1 + vertex2.uv * w2 };
 							Vector2 uv = (vertex0.uv / vertex0.position.z * w0 + vertex1.uv / vertex1.position.z * w1 + vertex2.uv / vertex2.position.z * w2) * currentDepth;
-							uv = Vector2{ Clamp(uv.y, 0.f, 1.f), Clamp(uv.x, 0.f, 1.f) }; // I am not sure why it's turned otherwise
 							finalColor = m_pTexture->Sample(uv);
 							
 
@@ -816,4 +887,199 @@ void Renderer::Render_W2_Part3()
 			}
 		}
 	}
+}
+
+void Renderer::Render_W3_Part1()
+{
+	SDL_FillRect(m_pBackBuffer, NULL, 0x111111);
+	std::fill_n(m_pDepthBufferPixels, m_Width * m_Height, FLT_MAX);
+
+	VertexTransformationFunction(m_Meshes);
+
+	for (const Mesh& mesh : m_Meshes)
+	{
+		size_t size = (mesh.primitiveTopology == PrimitiveTopology::TriangleList) ? mesh.indices.size() / 3 : mesh.indices.size() - 2;
+		for (size_t i = 0; i < size; i++)
+		{
+			Vertex_Out vertex0{};
+			Vertex_Out vertex1{};
+			Vertex_Out vertex2{};
+
+			switch (mesh.primitiveTopology)
+			{
+			case PrimitiveTopology::TriangleList:
+				vertex0 = mesh.vertices_out[mesh.indices[i * 3]];
+				vertex1 = mesh.vertices_out[mesh.indices[i * 3 + 1]];
+				vertex2 = mesh.vertices_out[mesh.indices[i * 3 + 2]];
+				break;
+			case PrimitiveTopology::TriangleStrip:
+				if (mesh.indices[i] == mesh.indices[i + 1] || mesh.indices[i + 1] == mesh.indices[i + 2])
+				{
+					continue; // new strip, skip;
+				}
+
+				if (i % 2 == 0)
+				{
+					//Clockwise
+					vertex0 = mesh.vertices_out[mesh.indices[i]];
+					vertex1 = mesh.vertices_out[mesh.indices[i + 1]];
+					vertex2 = mesh.vertices_out[mesh.indices[i + 2]];
+				}
+				else
+				{
+					//Counter Clockwise
+					vertex0 = mesh.vertices_out[mesh.indices[i]];
+					vertex1 = mesh.vertices_out[mesh.indices[i + 2]];
+					vertex2 = mesh.vertices_out[mesh.indices[i + 1]];
+				}
+				break;
+			}
+
+			// Backface Culling
+
+			// Frustrum Clulling
+			// X and Y between -1 and 1
+			// Z between 0 and 1 flollowing directX convention
+			if (vertex0.position.x < -1.f || vertex0.position.x > 1.f) continue;
+			if (vertex0.position.y < -1.f || vertex0.position.y > 1.f) continue;
+			if (vertex0.position.z < 0 || vertex0.position.z > 1.f) continue;
+
+			if (vertex1.position.x < -1.f || vertex1.position.x > 1.f) continue;
+			if (vertex1.position.y < -1.f || vertex1.position.y > 1.f) continue;
+			if (vertex1.position.z < 0 || vertex1.position.z > 1.f) continue;
+
+			if (vertex2.position.x < -1.f || vertex2.position.x > 1.f) continue;
+			if (vertex2.position.y < -1.f || vertex2.position.y > 1.f) continue;
+			if (vertex2.position.z < 0 || vertex2.position.z > 1.f) continue;
+
+			//Projection TO NDC/Raster/Screen Space
+			vertex0.position.x = (vertex0.position.x + 1) / 2.f * m_Width;
+			vertex0.position.y = (1 - vertex0.position.y) / 2.f * m_Height;
+			vertex1.position.x = (vertex1.position.x + 1) / 2.f * m_Width;
+			vertex1.position.y = (1 - vertex1.position.y) / 2.f * m_Height;
+			vertex2.position.x = (vertex2.position.x + 1) / 2.f * m_Width;
+			vertex2.position.y = (1 - vertex2.position.y) / 2.f * m_Height;
+
+
+			int bbMaxX{}, bbMaxY{};
+			bbMaxX = static_cast<int>(std::max(vertex0.position.x, std::max(vertex1.position.x, vertex2.position.x)));
+			bbMaxY = static_cast<int>(std::max(vertex0.position.y, std::max(vertex1.position.y, vertex2.position.y)));
+
+			int bbMinX{}, bbMinY{};
+			bbMinX = static_cast<int>(std::min(vertex0.position.x, std::min(vertex1.position.x, vertex2.position.x)));
+			bbMinY = static_cast<int>(std::min(vertex0.position.y, std::min(vertex1.position.y, vertex2.position.y)));
+
+			/*bbMaxX = Clamp(bbMaxX + 1, 0, m_Width);
+			bbMaxY = Clamp(bbMaxY + 1, 0, m_Height);
+
+			bbMinX = Clamp(bbMinX - 1, 0, m_Width);
+			bbMinY = Clamp(bbMinY - 1, 0, m_Height);*/
+
+			for (int px{ bbMinX - 1 }; px < bbMaxX + 1; ++px)
+			{
+				for (int py{ bbMinY - 1 }; py < bbMaxY + 1; ++py)
+				{
+					const Vector2 p{ static_cast<float>(px), static_cast<float>(py) };
+
+					//Does pixel and triangle overlap?
+					
+					if (Utils::TriangleHit(vertex0, vertex1, vertex2, p))
+					{
+						const Vector2 v0{ vertex0.position.GetXY() };
+						const Vector2 v1{ vertex1.position.GetXY() };
+						const Vector2 v2{ vertex2.position.GetXY() };
+
+						float w0{ Vector2::Cross(v2 - v1, p - v1) };
+						float w1{ Vector2::Cross(v0 - v2, p - v2) };
+						float w2{ Vector2::Cross(v1 - v0, p - v0) };
+
+						const float total{ w0 + w1 + w2 };
+						w0 /= total;
+						w1 /= total;
+						w2 /= total;
+
+
+						const float currentDepth = 1 / (1 / vertex0.position.z * w0 + 1 / vertex1.position.z * w1 + 1 / vertex2.position.z * w2);
+
+						if (m_pDepthBufferPixels[px + (py * m_Width)] >= currentDepth)
+						{
+							m_pDepthBufferPixels[px + (py * m_Width)] = currentDepth;
+
+							
+							ColorRGB finalColor{};
+							if (m_RenderDepth)
+							{
+								float depthColor{Utils::Remap(currentDepth, 0.985f, 1.f)};
+								finalColor = ColorRGB{ depthColor, depthColor, depthColor };
+							}
+							else
+							{
+								const float wInterpolated = 1 / (1 / vertex0.position.w * w0 + 1 / vertex1.position.w * w1 + 1 / vertex2.position.w * w2);
+								const Vector2 uv = (vertex0.uv / vertex0.position.w * w0 + vertex1.uv / vertex1.position.w * w1 + vertex2.uv / vertex2.position.w * w2) * wInterpolated;
+								finalColor = m_pTexture->Sample(uv);
+							}
+							
+
+							//Update Color in Buffer
+							finalColor.MaxToOne();
+
+							m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+								static_cast<uint8_t>(finalColor.r * 255),
+								static_cast<uint8_t>(finalColor.g * 255),
+								static_cast<uint8_t>(finalColor.b * 255));
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+void Renderer::InputLogic(Timer* pTimer)
+{
+	//Keyboard Input
+	const uint8_t* pKeyboardState = SDL_GetKeyboardState(nullptr);
+
+	if (pKeyboardState[SDL_SCANCODE_F4])
+	{
+		m_RenderDepth = !m_RenderDepth; //F4
+	}
+	else if (pKeyboardState[SDL_SCANCODE_F5])
+	{
+		m_RotateMeshes= !m_RotateMeshes; //F5
+	}
+	else if (pKeyboardState[SDL_SCANCODE_F6])
+	{
+		m_RenderNormalMap = !m_RenderNormalMap; //F6
+	}
+	else if (pKeyboardState[SDL_SCANCODE_F7])
+	{
+		m_RenderMode = static_cast<Rendermodes>((int(m_RenderMode) + 1) % int(Rendermodes::Combined) + 1); //F7
+	}
+
+	//SDL_Event e;
+	//
+	//while (SDL_PollEvent(&e))
+	//{
+	//	switch (e.type)
+	//	{
+	//	case SDL_KEYUP:
+	//		switch (e.key.keysym.scancode)
+	//		{
+	//		case SDL_SCANCODE_F4:
+	//			m_RenderDepth = !m_RenderDepth;
+	//			break;
+	//		case SDL_SCANCODE_F5:
+	//			m_RotateMeshes = !m_RotateMeshes;
+	//			break;
+	//		case SDL_SCANCODE_F6:
+	//			m_RenderNormalMap = !m_RenderNormalMap;
+	//			break;
+	//		case SDL_SCANCODE_F7:
+	//			m_RenderMode = static_cast<Rendermodes>((int(m_RenderMode) + 1) % int(Rendermodes::Combined) + 1); //F7
+	//			break;
+	//		}
+	//		break;
+	//	}
+	//}
 }

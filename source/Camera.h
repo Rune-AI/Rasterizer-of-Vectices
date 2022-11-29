@@ -22,6 +22,9 @@ namespace dae
 		Vector3 origin{};
 		float fovAngle{90.f};
 		float fov{ tanf((fovAngle * TO_RADIANS) / 2.f) };
+		
+		float nearPlane{ 0.1f };
+		float farPlane{ 100.f };
 
 		Vector3 forward{Vector3::UnitZ};
 		Vector3 up{Vector3::UnitY};
@@ -33,24 +36,26 @@ namespace dae
 		Matrix invViewMatrix{};
 		Matrix viewMatrix{};
 
+        Matrix projectionMatrix{};
+
         const float movementSpeed{ 7.0f };
         const float rotationSpeed{ 40.0f };
         const float keyboardRotationSpeed{ 80.0f };
 		
 		bool updateONB{ true };
 
-		void Initialize(float _fovAngle = 90.f, Vector3 _origin = {0.f,0.f,0.f})
+		void Initialize(float _fovAngle = 90.f, Vector3 _origin = {0.f,0.f,0.f}, float aspectRatio = 1.f)
 		{
 			fovAngle = _fovAngle;
 			fov = tanf((fovAngle * TO_RADIANS) / 2.f);
 
 			origin = _origin;
+            CalculateProjectionMatrix(aspectRatio);
 		}
 
 		void CalculateViewMatrix()
 		{
 			if (!updateONB) return;
-			//TODO W1
 			//ONB => invViewMatrix
 			//Inverse(ONB) => ViewMatrix
 
@@ -74,10 +79,9 @@ namespace dae
             updateONB = false;
 		}
 
-		void CalculateProjectionMatrix()
+		void CalculateProjectionMatrix(const float& aspectRatio)
 		{
-			//TODO W2
-
+            projectionMatrix = Matrix::CreatePerspectiveFovLH(fov, aspectRatio, nearPlane, farPlane);
 			//ProjectionMatrix => Matrix::CreatePerspectiveFovLH(...) [not implemented yet]
 			//DirectX Implementation => https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dxmatrixperspectivefovlh
 		}
@@ -91,7 +95,7 @@ namespace dae
 
 			//Update Matrices
 			CalculateViewMatrix();
-			CalculateProjectionMatrix(); //Try to optimize this - should only be called once or when fov/aspectRatio changes
+			//CalculateProjectionMatrix(); //TODO Try to optimize this - should only be called once or when fov/aspectRatio changes
 		}
 
 		void InputLogic(Timer* pTimer)
@@ -105,42 +109,52 @@ namespace dae
             if (pKeyboardState[SDL_SCANCODE_W])
             {
                 origin += forward * movementSpeed * deltaTime;
+                updateONB = true;
             }
             if (pKeyboardState[SDL_SCANCODE_S])
             {
                 origin -= forward * movementSpeed * deltaTime;
+                updateONB = true;
             }
             if (pKeyboardState[SDL_SCANCODE_D])
             {
                 origin += right * movementSpeed * deltaTime;
+                updateONB = true;
             }
             if (pKeyboardState[SDL_SCANCODE_A])
             {
                 origin -= right * movementSpeed * deltaTime;
+                updateONB = true;
             }
             if (pKeyboardState[SDL_SCANCODE_SPACE])
             {
                 origin += up * movementSpeed * deltaTime;
+                updateONB = true;
             }
             if (pKeyboardState[SDL_SCANCODE_LSHIFT])
             {
                 origin -= up * movementSpeed * deltaTime;
+                updateONB = true;
             }
             if (pKeyboardState[SDL_SCANCODE_UP])
             {
                 totalPitch += keyboardRotationSpeed * deltaTime;
+                updateONB = true;
             }
             if (pKeyboardState[SDL_SCANCODE_DOWN])
             {
                 totalPitch -= keyboardRotationSpeed * deltaTime;
+                updateONB = true;
             }
             if (pKeyboardState[SDL_SCANCODE_LEFT])
             {
                 totalYaw -= keyboardRotationSpeed * deltaTime;
+                updateONB = true;
             }
             if (pKeyboardState[SDL_SCANCODE_RIGHT])
             {
                 totalYaw += keyboardRotationSpeed * deltaTime;
+                updateONB = true;
             }
             //Mouse Input
             int mouseX{}, mouseY{};
@@ -175,5 +189,6 @@ namespace dae
                 updateONB = true;
             }
 		}
+
 	};
 }

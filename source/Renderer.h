@@ -17,6 +17,15 @@ namespace dae
 	class Timer;
 	class Scene;
 
+	enum Rendermodes
+	{
+		ObservedArea,
+		Diffuse,
+		Specular,
+		Ambient,
+		Combined
+	};
+
 	class Renderer final
 	{
 	public:
@@ -43,6 +52,10 @@ namespace dae
 		void Render_W2_Part2(); //TriangleStrip
 		void Render_W2_Part3(); //Texture, Bounding box fix, Improved depth buffer
 
+		void Render_W3_Part1(); //TUKTUK
+
+		void Render_W4_Part1(); //TUKTUK
+
 	private:
 		SDL_Window* m_pWindow{};
 
@@ -52,16 +65,25 @@ namespace dae
 
 		float* m_pDepthBufferPixels{};
 
+		bool m_RenderDepth{ true }; //F4
+		bool m_RotateMeshes{ true }; //F5
+		bool m_RenderNormalMap{ true }; //F6
+		Rendermodes m_RenderMode{ Rendermodes::Combined }; //F7
+		
 		Camera m_Camera{};
 
 		int m_Width{};
 		int m_Height{};
 
 		Texture* m_pTexture{};
+		std::vector<Mesh> m_Meshes{};
 
 		//Function that transforms the vertices from the mesh from World space to Screen space
 		void VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const; //W1 Version
 		void VertexTransformationFunction(const std::vector<Mesh>& mesh_in, std::vector<Mesh>& mesh_out) const; //W2 Version
+		void VertexTransformationFunction(std::vector<Mesh>& meshes) const;
+
+		void InputLogic(Timer* pTimer);
 
 	};
 }
