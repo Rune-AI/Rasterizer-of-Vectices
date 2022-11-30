@@ -38,7 +38,7 @@ namespace dae
 
         Matrix projectionMatrix{};
 
-        const float movementSpeed{ 7.0f };
+        const float movementSpeed{ 20.0f };
         const float rotationSpeed{ 40.0f };
         const float keyboardRotationSpeed{ 80.0f };
 		

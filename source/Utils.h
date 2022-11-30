@@ -211,5 +211,48 @@ namespace dae
 		{
 			return (value - min) / (max - min);
 		}
+
+		/**
+		 * \param kd Diffuse Reflection Coefficient
+		 * \param cd Diffuse Color
+		 * \return Lambert Diffuse Color
+		 */
+		static ColorRGB Lambert(float kd, const ColorRGB& cd)
+		{
+			ColorRGB perfectDiffuseReflectance{ cd * kd };
+			return perfectDiffuseReflectance / M_PI;
+		}
+		static ColorRGB Lambert(const ColorRGB& kd, const ColorRGB& cd)
+		{
+			ColorRGB perfectDiffuseReflectance{ cd * kd };
+			return perfectDiffuseReflectance / M_PI;
+		}
+
+		/// <summary>
+		///
+		/// </summary>
+		/// <param name="ks Specular Reflection Coefficient"></param>
+		/// <param name="exp Phong Exponent"></param>
+		/// <param name="l Incoming (incident) Light Direction"></param>
+		/// <param name="v View Direction"></param>
+		/// <param name="n Normal of the Surface"></param>
+		/// <returns>Phong Specular Color</returns>
+		static ColorRGB Phong(float ks, float exp, const Vector3& l, const Vector3& v, const Vector3& n)
+		{
+			const Vector3 reflectVector{ l - 2 * Vector3::Dot(n, l) * n };
+			const float cosAngle{ std::max(Vector3::Dot(reflectVector, v), 0.f) };
+			const float PhongSpecularReflection = ks * powf(cosAngle, exp);
+
+			return ColorRGB(PhongSpecularReflection, PhongSpecularReflection, PhongSpecularReflection);
+		}
+
+		static ColorRGB Phong(ColorRGB ks, float exp, const Vector3& l, const Vector3& v, const Vector3& n)
+		{
+			const Vector3 reflectVector{ l - 2 * Vector3::Dot(n, l) * n };
+			const float cosAngle{ std::max(Vector3::Dot(reflectVector, v), 0.f) };
+			const ColorRGB PhongSpecularReflection = ks * powf(cosAngle, exp);
+
+			return PhongSpecularReflection;
+		}
 	}
 }

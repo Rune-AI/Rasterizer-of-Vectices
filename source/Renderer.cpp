@@ -1,6 +1,7 @@
 //External includes
 #include "SDL.h"
 #include "SDL_surface.h"
+#include <iostream>
 
 //Project includes
 #include "Renderer.h"
@@ -26,10 +27,15 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	std::fill_n(m_pDepthBufferPixels, m_Width * m_Height, FLT_MAX);
 
 	//Initialize Camera
-	m_Camera.Initialize(60.f, { .0f, .0f, -10.f }, m_Width / static_cast<float>(m_Height));
+	m_Camera.Initialize(45.f, { .0f, .0f, 0.f }, m_Width / static_cast<float>(m_Height));
 
 	//m_pTexture = Texture::LoadFromFile("Resources/uv_grid_2.png");
 	m_pTexture = Texture::LoadFromFile("Resources/tuktuk.png");
+	
+	m_pDiffuseTexture = Texture::LoadFromFile("Resources/vehicle_diffuse.png");
+	m_pGlossTexture = Texture::LoadFromFile("Resources/vehicle_gloss.png");
+	m_pNormalTexture = Texture::LoadFromFile("Resources/vehicle_normal.png");
+	m_pSpecularTexture = Texture::LoadFromFile("Resources/vehicle_specular.png");
 	
 	
 	
@@ -56,18 +62,30 @@ Renderer::Renderer(SDL_Window* pWindow) :
 		}
 	};
 	
-	if (!Utils::ParseOBJ("Resources/tuktuk.obj", m_Meshes[0].vertices, m_Meshes[0].indices))
+	//if (!Utils::ParseOBJ("Resources/tuktuk.obj", m_Meshes[0].vertices, m_Meshes[0].indices))
+	//{
+	//	// Failed texture load;
+	//}
+	//m_Meshes[0].primitiveTopology = PrimitiveTopology::TriangleList;
+	//m_Meshes[0].worldMatrix = Matrix::CreateTranslation(Vector3{0, -5, 20});
+
+
+	if (!Utils::ParseOBJ("Resources/vehicle.obj", m_Meshes[0].vertices, m_Meshes[0].indices))
 	{
 		// Failed texture load;
 	}
 	m_Meshes[0].primitiveTopology = PrimitiveTopology::TriangleList;
-	m_Meshes[0].worldMatrix = Matrix::CreateTranslation(Vector3{0, -5, 20});
+	m_Meshes[0].worldMatrix = Matrix::CreateTranslation(Vector3{ 0, 0, 50 });
 }
 
 Renderer::~Renderer()
 {
 	delete[] m_pDepthBufferPixels;
 	delete m_pTexture;
+	delete m_pDiffuseTexture;
+	delete m_pGlossTexture;
+	delete m_pNormalTexture;
+	delete m_pSpecularTexture;
 }
 
 void Renderer::Update(Timer* pTimer)
@@ -80,8 +98,6 @@ void Renderer::Update(Timer* pTimer)
 			mesh.worldMatrix = Matrix::CreateRotationY(pTimer->GetElapsed() * 1.f) * mesh.worldMatrix;
 		}
 	}
-
-	InputLogic(pTimer);
 }
 
 void Renderer::Render()
@@ -101,7 +117,9 @@ void Renderer::Render()
 	//Render_W2_Part2(); //TriangleStrip
 	//Render_W2_Part3(); //Texture, Bounding box fix, Improved depth buffer
 	
-	Render_W3_Part1(); //TUKTUK
+	//Render_W3_Part1(); //TUKTUK and rendering modes
+
+	Render_W4_Part1(); //Pixel Shading
 
 	//@END
 	//Update SDL Surface
@@ -190,13 +208,73 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes) const
 			Vertex_Out v_out{};
 			v_out.position = position;
 			v_out.color = vertex.color;
-			v_out.normal = vertex.normal;
-			v_out.tangent = vertex.tangent;
 			v_out.uv = vertex.uv;
+			v_out.normal = mesh.worldMatrix.TransformVector(vertex.normal);
+			v_out.tangent = mesh.worldMatrix.TransformVector(vertex.tangent);
+			v_out.viewDirection = m_Camera.origin - mesh.worldMatrix.TransformPoint(vertex.position);
 
 			mesh.vertices_out.emplace_back(v_out);
 		}
 	}
+}
+
+ColorRGB dae::Renderer::PixelShading(const Vertex_Out& v) const
+{
+	const Vector3 lightDirection{ .577f, -.577f, .577f };
+	const float lightIntesity{ 7.f };
+	const float shininess{ 25.f };
+	const ColorRGB ambient{ .025f, .025f, .025f };
+
+	
+	Vector3 normal = v.normal;
+	if (m_RenderNormalMap)
+	{
+		const Vector3 binormal{ Vector3::Cross(v.normal, v.tangent) };
+		const Matrix tangentSpaceAxis{ v.tangent, binormal, v.normal, Vector3::Zero };
+		
+		const ColorRGB sampledNormal = m_pNormalTexture->Sample(v.uv);
+		normal = {sampledNormal.r, sampledNormal.g, sampledNormal.b };
+		normal = 2.f * normal - Vector3{ 1.f, 1.f, 1.f };
+		normal = tangentSpaceAxis.TransformVector(normal).Normalized();
+	}
+
+	const float lambertCosineObserverdArea{ Vector3::Dot(normal, -lightDirection) };
+	if (lambertCosineObserverdArea <= 0)
+	{
+		return { 0,0,0 };
+	}
+	
+	const ColorRGB diffuse{ Utils::Lambert(lightIntesity, m_pDiffuseTexture->Sample(v.uv)) };
+	const ColorRGB phong{ Utils::Phong(m_pSpecularTexture->Sample(v.uv), m_pGlossTexture->Sample(v.uv).r * shininess, lightDirection, v.viewDirection, v.normal) };
+	
+	switch (m_RenderMode)
+	{
+	case dae::ObservedArea:
+		return ColorRGB{ lambertCosineObserverdArea, lambertCosineObserverdArea, lambertCosineObserverdArea };
+		break;
+	case dae::Diffuse:
+		return diffuse * lambertCosineObserverdArea;
+		break;
+	case dae::Specular:
+		return phong * lambertCosineObserverdArea;
+		break;
+	case dae::Ambient:
+		return ambient;
+		break;
+	case dae::Combined:
+		return
+			(diffuse + phong)
+			* lambertCosineObserverdArea
+			+ ambient;
+
+		return { lightIntesity * (ambient + diffuse + phong) * lambertCosineObserverdArea };
+		break;
+	default:
+		throw std::runtime_error("How did you get here????");
+		break;
+	}
+	
+
 }
 
 bool Renderer::SaveBufferToImage() const
@@ -969,16 +1047,23 @@ void Renderer::Render_W3_Part1()
 			bbMinX = static_cast<int>(std::min(vertex0.position.x, std::min(vertex1.position.x, vertex2.position.x)));
 			bbMinY = static_cast<int>(std::min(vertex0.position.y, std::min(vertex1.position.y, vertex2.position.y)));
 
-			/*bbMaxX = Clamp(bbMaxX + 1, 0, m_Width);
-			bbMaxY = Clamp(bbMaxY + 1, 0, m_Height);
-
-			bbMinX = Clamp(bbMinX - 1, 0, m_Width);
-			bbMinY = Clamp(bbMinY - 1, 0, m_Height);*/
-
 			for (int px{ bbMinX - 1 }; px < bbMaxX + 1; ++px)
 			{
 				for (int py{ bbMinY - 1 }; py < bbMaxY + 1; ++py)
 				{
+					if (m_RenderBoundingBox)
+					{
+						ColorRGB finalColor{ 1,1,1 };
+						//Update Color in Buffer
+						finalColor.MaxToOne();
+
+						m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+							static_cast<uint8_t>(finalColor.r * 255),
+							static_cast<uint8_t>(finalColor.g * 255),
+							static_cast<uint8_t>(finalColor.b * 255));
+						continue;
+					}
+					
 					const Vector2 p{ static_cast<float>(px), static_cast<float>(py) };
 
 					//Does pixel and triangle overlap?
@@ -1035,51 +1120,219 @@ void Renderer::Render_W3_Part1()
 	}
 }
 
-void Renderer::InputLogic(Timer* pTimer)
+void Renderer::Render_W4_Part1()
 {
-	//Keyboard Input
-	const uint8_t* pKeyboardState = SDL_GetKeyboardState(nullptr);
+	SDL_FillRect(m_pBackBuffer, NULL, 0x111111);
+	std::fill_n(m_pDepthBufferPixels, m_Width * m_Height, FLT_MAX);
 
-	if (pKeyboardState[SDL_SCANCODE_F4])
-	{
-		m_RenderDepth = !m_RenderDepth; //F4
-	}
-	else if (pKeyboardState[SDL_SCANCODE_F5])
-	{
-		m_RotateMeshes= !m_RotateMeshes; //F5
-	}
-	else if (pKeyboardState[SDL_SCANCODE_F6])
-	{
-		m_RenderNormalMap = !m_RenderNormalMap; //F6
-	}
-	else if (pKeyboardState[SDL_SCANCODE_F7])
-	{
-		m_RenderMode = static_cast<Rendermodes>((int(m_RenderMode) + 1) % int(Rendermodes::Combined) + 1); //F7
-	}
+	VertexTransformationFunction(m_Meshes);
 
-	//SDL_Event e;
-	//
-	//while (SDL_PollEvent(&e))
-	//{
-	//	switch (e.type)
-	//	{
-	//	case SDL_KEYUP:
-	//		switch (e.key.keysym.scancode)
-	//		{
-	//		case SDL_SCANCODE_F4:
-	//			m_RenderDepth = !m_RenderDepth;
-	//			break;
-	//		case SDL_SCANCODE_F5:
-	//			m_RotateMeshes = !m_RotateMeshes;
-	//			break;
-	//		case SDL_SCANCODE_F6:
-	//			m_RenderNormalMap = !m_RenderNormalMap;
-	//			break;
-	//		case SDL_SCANCODE_F7:
-	//			m_RenderMode = static_cast<Rendermodes>((int(m_RenderMode) + 1) % int(Rendermodes::Combined) + 1); //F7
-	//			break;
-	//		}
-	//		break;
-	//	}
-	//}
+	for (const Mesh& mesh : m_Meshes)
+	{
+		size_t size = (mesh.primitiveTopology == PrimitiveTopology::TriangleList) ? mesh.indices.size() / 3 : mesh.indices.size() - 2;
+		for (size_t i = 0; i < size; i++)
+		{
+			Vertex_Out vertex0{};
+			Vertex_Out vertex1{};
+			Vertex_Out vertex2{};
+
+			switch (mesh.primitiveTopology)
+			{
+			case PrimitiveTopology::TriangleList:
+				vertex0 = mesh.vertices_out[mesh.indices[i * 3]];
+				vertex1 = mesh.vertices_out[mesh.indices[i * 3 + 1]];
+				vertex2 = mesh.vertices_out[mesh.indices[i * 3 + 2]];
+				break;
+			case PrimitiveTopology::TriangleStrip:
+				if (mesh.indices[i] == mesh.indices[i + 1] || mesh.indices[i + 1] == mesh.indices[i + 2])
+				{
+					continue; // new strip, skip;
+				}
+
+				if (i % 2 == 0)
+				{
+					//Clockwise
+					vertex0 = mesh.vertices_out[mesh.indices[i]];
+					vertex1 = mesh.vertices_out[mesh.indices[i + 1]];
+					vertex2 = mesh.vertices_out[mesh.indices[i + 2]];
+				}
+				else
+				{
+					//Counter Clockwise
+					vertex0 = mesh.vertices_out[mesh.indices[i]];
+					vertex1 = mesh.vertices_out[mesh.indices[i + 2]];
+					vertex2 = mesh.vertices_out[mesh.indices[i + 1]];
+				}
+				break;
+			}
+
+			// Backface / frontface Culling
+
+			// Frustrum Clulling
+			// X and Y between -1 and 1
+			// Z between 0 and 1 flollowing directX convention
+			if (vertex0.position.x < -1.f || vertex0.position.x > 1.f) continue;
+			if (vertex0.position.y < -1.f || vertex0.position.y > 1.f) continue;
+			if (vertex0.position.z < 0 || vertex0.position.z > 1.f) continue;
+
+			if (vertex1.position.x < -1.f || vertex1.position.x > 1.f) continue;
+			if (vertex1.position.y < -1.f || vertex1.position.y > 1.f) continue;
+			if (vertex1.position.z < 0 || vertex1.position.z > 1.f) continue;
+
+			if (vertex2.position.x < -1.f || vertex2.position.x > 1.f) continue;
+			if (vertex2.position.y < -1.f || vertex2.position.y > 1.f) continue;
+			if (vertex2.position.z < 0 || vertex2.position.z > 1.f) continue;
+
+			//Projection TO NDC/Raster/Screen Space
+			vertex0.position.x = (vertex0.position.x + 1) / 2.f * m_Width;
+			vertex0.position.y = (1 - vertex0.position.y) / 2.f * m_Height;
+			vertex1.position.x = (vertex1.position.x + 1) / 2.f * m_Width;
+			vertex1.position.y = (1 - vertex1.position.y) / 2.f * m_Height;
+			vertex2.position.x = (vertex2.position.x + 1) / 2.f * m_Width;
+			vertex2.position.y = (1 - vertex2.position.y) / 2.f * m_Height;
+
+
+			int bbMaxX{}, bbMaxY{};
+			bbMaxX = static_cast<int>(std::max(vertex0.position.x, std::max(vertex1.position.x, vertex2.position.x)));
+			bbMaxY = static_cast<int>(std::max(vertex0.position.y, std::max(vertex1.position.y, vertex2.position.y)));
+
+			int bbMinX{}, bbMinY{};
+			bbMinX = static_cast<int>(std::min(vertex0.position.x, std::min(vertex1.position.x, vertex2.position.x)));
+			bbMinY = static_cast<int>(std::min(vertex0.position.y, std::min(vertex1.position.y, vertex2.position.y)));
+
+			for (int px{ bbMinX - 1 }; px < bbMaxX + 1; ++px)
+			{
+				for (int py{ bbMinY - 1 }; py < bbMaxY + 1; ++py)
+				{
+					if (m_RenderBoundingBox)
+					{
+						ColorRGB finalColor{ 1,1,1 };
+						//Update Color in Buffer
+						finalColor.MaxToOne();
+
+						m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+							static_cast<uint8_t>(finalColor.r * 255),
+							static_cast<uint8_t>(finalColor.g * 255),
+							static_cast<uint8_t>(finalColor.b * 255));
+						continue;
+					}
+
+					const Vector2 p{ static_cast<float>(px), static_cast<float>(py) };
+
+
+					const Vector2 v0{ vertex0.position.GetXY() };
+					const Vector2 v1{ vertex1.position.GetXY() };
+					const Vector2 v2{ vertex2.position.GetXY() };
+
+					float w0{ Vector2::Cross(v2 - v1, p - v1) }; //same as triangle hit test
+					if (w0 < 0) continue; // Point is not in triangle 
+					float w1{ Vector2::Cross(v0 - v2, p - v2) }; //NOT the same as triangle hit test
+					if (w1 < 0) continue; // Point is not in triangle
+					float w2{ Vector2::Cross(v1 - v0, p - v0) }; //same as triangle hit test
+					if (w2 < 0) continue; // Point is not in triangle
+
+					const float total{ w0 + w1 + w2 };
+					w0 /= total;
+					w1 /= total;
+					w2 /= total;
+
+					const float currentDepth = 1 / (1 / vertex0.position.z * w0 + 1 / vertex1.position.z * w1 + 1 / vertex2.position.z * w2);
+
+					if (m_pDepthBufferPixels[px + (py * m_Width)] >= currentDepth)
+					{
+						m_pDepthBufferPixels[px + (py * m_Width)] = currentDepth;
+
+
+						ColorRGB finalColor{};
+						if (m_RenderDepth)
+						{
+							float depthColor{ Utils::Remap(currentDepth, 0.985f, 1.f) };
+							finalColor = ColorRGB{ depthColor, depthColor, depthColor };
+						}
+						else
+						{
+							const float wInterpolated = 1 / (1 / vertex0.position.w * w0 + 1 / vertex1.position.w * w1 + 1 / vertex2.position.w * w2);
+							
+							/*const Vector2 uv = (vertex0.uv / vertex0.position.w * w0 + vertex1.uv / vertex1.position.w * w1 + vertex2.uv / vertex2.position.w * w2) * wInterpolated;
+							finalColor = m_pTexture->Sample(uv);*/
+
+							Vertex_Out interpolatedVertex{};
+							//interpolatedVertex.color = (vertex0.color / vertex0.position.w * w0 + vertex1.color / vertex1.position.w * w1 + vertex2.color / vertex2.position.w * w2) * wInterpolated;
+							interpolatedVertex.normal = ((vertex0.normal / vertex0.position.w * w0 + vertex1.normal / vertex1.position.w * w1 + vertex2.normal / vertex2.position.w * w2) * wInterpolated).Normalized();
+							
+							const Vector2 interpolatedXY{ (v0 / vertex0.position.w * w0 + v1 / vertex1.position.w * w1 + v2 / vertex2.position.w * w2) * wInterpolated };
+							const float interpolatedZ{ 1 / (1 / vertex0.position.z * w0 + 1 / vertex1.position.z * w1 + 1 / vertex2.position.z * w2) };
+							const float interpolatedW{ 1 / (1 / vertex0.position.w * w0 + 1 / vertex1.position.w * w1 + 1 / vertex2.position.w * w2) };
+							Vector4 interpolatedPos{ interpolatedXY.x, interpolatedXY.y, interpolatedZ, interpolatedW };
+							interpolatedVertex.position = interpolatedPos;
+							
+							interpolatedVertex.tangent = ((vertex0.tangent / vertex0.position.w * w0 + vertex1.tangent / vertex1.position.w * w1 + vertex2.tangent / vertex2.position.w * w2) * wInterpolated).Normalized();;
+							interpolatedVertex.uv = (vertex0.uv / vertex0.position.w * w0 + vertex1.uv / vertex1.position.w * w1 + vertex2.uv / vertex2.position.w * w2) * wInterpolated;
+							interpolatedVertex.viewDirection = (vertex0.viewDirection / vertex0.position.w * w0 + vertex1.viewDirection / vertex1.position.w * w1 + vertex2.viewDirection / vertex2.position.w * w2) * wInterpolated;
+
+							finalColor = PixelShading(interpolatedVertex);
+
+						}
+
+
+						//Update Color in Buffer
+						finalColor.MaxToOne();
+
+						m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+							static_cast<uint8_t>(finalColor.r * 255),
+							static_cast<uint8_t>(finalColor.g * 255),
+							static_cast<uint8_t>(finalColor.b * 255));
+					}
+				}
+			}
+		}
+	}
+}
+
+void Renderer::InputLogic(const SDL_Event& e)
+{
+	switch (e.key.keysym.scancode)
+	{
+	case SDL_SCANCODE_F3:
+		m_RenderBoundingBox = !m_RenderBoundingBox;
+		std::cout << "Render Bounding Boxes : " << m_RenderBoundingBox << "\n";
+		break;
+	case SDL_SCANCODE_F4:
+		m_RenderDepth = !m_RenderDepth;
+		std::cout << "Render Depth : " << m_RenderDepth << "\n";
+		break;
+	case SDL_SCANCODE_F5:
+		m_RotateMeshes = !m_RotateMeshes;
+		std::cout << "Rotate Meshes : " << m_RotateMeshes << "\n";
+		break;
+	case SDL_SCANCODE_F6:
+		m_RenderNormalMap = !m_RenderNormalMap;
+		std::cout << "Render Normal Map : " << m_RenderNormalMap << "\n";
+		break;
+	case SDL_SCANCODE_F7:
+		m_RenderMode = static_cast<Rendermodes>((int(m_RenderMode) + 1) % (int(Rendermodes::Combined) + 1)); //F7
+
+		std::cout << "Render Mode : ";
+		switch (m_RenderMode)
+		{
+		case dae::ObservedArea:
+			std::cout << "ObservedArea\n";
+			break;
+		case dae::Diffuse:
+			std::cout << "Diffuse\n";
+			break;
+		case dae::Specular:
+			std::cout << "Specular\n";
+			break;
+		case dae::Ambient:
+			std::cout << "Ambient\n";
+			break;
+		case dae::Combined:
+			std::cout << "Combined\n";
+			break;
+		default:
+			break;
+		}
+		break;
+	}
 }
