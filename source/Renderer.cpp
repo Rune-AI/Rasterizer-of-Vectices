@@ -211,7 +211,7 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes) const
 			v_out.uv = vertex.uv;
 			v_out.normal = mesh.worldMatrix.TransformVector(vertex.normal);
 			v_out.tangent = mesh.worldMatrix.TransformVector(vertex.tangent);
-			v_out.viewDirection = m_Camera.origin - mesh.worldMatrix.TransformPoint(vertex.position);
+			v_out.viewDirection = (m_Camera.origin - mesh.worldMatrix.TransformPoint(vertex.position)).Normalized();
 
 			mesh.vertices_out.emplace_back(v_out);
 		}
@@ -245,7 +245,8 @@ ColorRGB dae::Renderer::PixelShading(const Vertex_Out& v) const
 	}
 	
 	const ColorRGB diffuse{ Utils::Lambert(lightIntesity, m_pDiffuseTexture->Sample(v.uv)) };
-	const ColorRGB phong{ Utils::Phong(m_pSpecularTexture->Sample(v.uv), m_pGlossTexture->Sample(v.uv).r * shininess, lightDirection, v.viewDirection, v.normal) };
+	ColorRGB phong{ Utils::Phong(1.f, m_pGlossTexture->Sample(v.uv).r * shininess, lightDirection, v.viewDirection, v.normal) };
+	phong *= m_pSpecularTexture->Sample(v.uv);
 	
 	switch (m_RenderMode)
 	{

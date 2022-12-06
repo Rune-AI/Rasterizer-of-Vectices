@@ -239,7 +239,8 @@ namespace dae
 		/// <returns>Phong Specular Color</returns>
 		static ColorRGB Phong(float ks, float exp, const Vector3& l, const Vector3& v, const Vector3& n)
 		{
-			const Vector3 reflectVector{ l - 2 * Vector3::Dot(n, l) * n };
+			const Vector3 reflectVector{ Vector3::Reflect(l, n) };
+			//const Vector3 reflectVector{ l - 2 * Vector3::Dot(n, l) * n };
 			const float cosAngle{ std::max(Vector3::Dot(reflectVector, v), 0.f) };
 			const float PhongSpecularReflection = ks * powf(cosAngle, exp);
 
