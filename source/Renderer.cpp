@@ -1171,7 +1171,7 @@ void Renderer::Render_W4_Part1()
 
 			// Frustrum Clulling
 			// X and Y between -1 and 1
-			// Z between 0 and 1 flollowing directX convention
+			// Z between 0 and 1 following directX convention
 			if (vertex0.position.x < -1.f || vertex0.position.x > 1.f) continue;
 			if (vertex0.position.y < -1.f || vertex0.position.y > 1.f) continue;
 			if (vertex0.position.z < 0 || vertex0.position.z > 1.f) continue;
