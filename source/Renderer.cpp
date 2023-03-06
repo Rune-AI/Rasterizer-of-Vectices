@@ -76,6 +76,8 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	}
 	m_Meshes[0].primitiveTopology = PrimitiveTopology::TriangleList;
 	m_Meshes[0].worldMatrix = Matrix::CreateTranslation(Vector3{ 0, 0, 50 });
+
+	PrintInstructions();
 }
 
 Renderer::~Renderer()
@@ -1336,4 +1338,13 @@ void Renderer::InputLogic(const SDL_Event& e)
 		}
 		break;
 	}
+}
+
+void Renderer::PrintInstructions() const
+{
+	std::cout << "F3 : Render Bounding Boxes\n";
+	std::cout << "F4 : Render Depth\n";
+	std::cout << "F5 : Rotate Meshes\n";
+	std::cout << "F6 : Render Normal Map\n";
+	std::cout << "F7 : Render Mode\n";
 }

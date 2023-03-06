@@ -59,6 +59,8 @@ namespace dae
 
 		void InputLogic(const SDL_Event& e);
 
+		void PrintInstructions() const;
+
 	private:
 		SDL_Window* m_pWindow{};
 
